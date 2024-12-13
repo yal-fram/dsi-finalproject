@@ -1,5 +1,11 @@
 # Ignore pycache Folder
 __pycache__
 
+# Ignore cache Folder
+cache
+
 # Ignore csv Files
 *.csv
+
+# Ignore geojson
+neighbourhoods.geojson
