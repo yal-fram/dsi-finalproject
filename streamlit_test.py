@@ -8,118 +8,156 @@ import geopandas as gpd
 import data_preprocessing as dp
 import folium
 import streamlit as st
-from streamlit.components.v1 import html
+# from streamlit.components.v1 import html
+from streamlit_folium import st_folium
 
 
-years = range(2020, 2024)
-data_list = []
+@st.cache_data
+def read_files(start_year=2020, end_year=2024):
+    years = range(start_year, end_year)
+    data_list = []
+    # Schleife über jedes Jahr
+    for year in years:
+        df = pd.read_csv(f"MVG_Rad_Fahrten_{year}.csv", sep=";", decimal=",", parse_dates=["STARTTIME       ", "ENDTIME         "])
+        
+        # Entfernen von Leerzeichen in den Columns
+        column_names = [dp.remove_space(column) for column in df.columns]
+        df.columns = column_names
 
-# Schleife über jedes Jahr
-for year in years:
-    df = pd.read_csv(f"MVG_Rad_Fahrten_{year}.csv", sep=";", decimal=",", parse_dates=["STARTTIME       ", "ENDTIME         "])
-    
-    # Entfernen von Leerzeichen in den Columns
-    column_names = [dp.remove_space(column) for column in df.columns]
-    df.columns = column_names
+        # Hinzufügen des eingelesenen DataFrames zur Liste
+        data_list.append(df)
 
-    # Hinzufügen des eingelesenen DataFrames zur Liste
-    data_list.append(df)
+    # alle Daten zu einem einzigen DataFrame kombinieren 
+    df = pd.concat(data_list, ignore_index=True)
+    return df
 
-# alle Daten zu einem einzigen DataFrame kombinieren 
-df = pd.concat(data_list, ignore_index=True)
+@st.cache_data
+def format_files(df):
+    # Entfernen von Leerzeichen bei Stationsnamen
+    df["RENTAL_STATION_NAME"] = df["RENTAL_STATION_NAME"].apply(dp.remove_space)
+    df["RETURN_STATION_NAME"] = df["RETURN_STATION_NAME"].apply(dp.remove_space)
 
-# Entfernen von Leerzeichen bei Stationsnamen
-df["RENTAL_STATION_NAME"] = df["RENTAL_STATION_NAME"].apply(dp.remove_space)
-df["RETURN_STATION_NAME"] = df["RETURN_STATION_NAME"].apply(dp.remove_space)
+    # Löschen von "Row"
+    df = df.drop("Row", axis=1)
 
-# Löschen von "Row"
-df = df.drop("Row", axis=1)
+    # Formatierung der Koordinaten + Entfernung ungültiger Daten
+    df = dp.handle_coordinates(df)
 
-# Formatierung der Koordinaten + Entfernung ungültiger Daten
-df = dp.handle_coordinates(df)
+    # Formatierung von is_station
+    df = dp.handle_is_station(df)
 
-# Formatierung von is_station
-df = dp.handle_is_station(df)
+    # Auffüllen fehlender Werte anhand des Vorhandenseins oder Fehlens von "station_name"-Werten
+    df = dp.fill_is_station_values(df)
 
-# Auffüllen fehlender Werte anhand des Vorhandenseins oder Fehlens von "station_name"-Werten
-df = dp.fill_is_station_values(df)
+    # Hinzufügen einer Spalte für die Dauer
+    df["DURATION"] = df["ENDTIME"] - df["STARTTIME"]
 
+    # Entfernen ungültiger Daten
+    df = dp.remove_invalid_datetime(df)
 
-# Hinzufügen einer Spalte für die Dauer
-df["DURATION"] = df["ENDTIME"] - df["STARTTIME"]
+    # Hinzufügen des Stadtviertels
+    df = dp.add_city_district(df)
 
-## Code aus Jupyter Notebooks, wird für Streamlit nicht benötigt
-# # Darstellung auf einer Karte
+    # Hinzufügen, ob Punkte in Stadtbereich ("city area")
+    df = dp.add_city_status(df)
 
-# geo_start = gpd.points_from_xy(x=january_1_2023['STARTLON'], crs="EPSG:4326", y=january_1_2023['STARTLAT'])
-# gdf_start = gpd.GeoDataFrame(january_1_2023, geometry=geo_start)
+    return df
 
-# geo_end = gpd.points_from_xy(x=january_1_2023['ENDLON'], y=january_1_2023["ENDLAT"], crs="EPSG:4326")
-# gdf_end = gpd.GeoDataFrame(january_1_2023, geometry=geo_end)
-# gdf_start = gdf_start.to_crs(epsg=3857)
-# gdf_end = gdf_end.to_crs(epsg=3857)
+# Removing data with NULL values
 
-# # Plotten des GeoDataFrames
-# fig, ax = plt.subplots(figsize=(10, 10))
-
-# # Plotten der Punkte
-# gdf_start.plot(ax=ax, marker='x', color='purple', markersize=5, alpha=0.7)
-# gdf_end.plot(ax=ax, marker='x', color='green', markersize=5, alpha=0.7)
-# # Füge die Basemap von contextily hinzu
-# cx.add_basemap(ax, crs=gdf_start.crs.to_string(), source=cx.providers.OpenStreetMap.Mapnik)
+df_all_data = format_files(read_files())
+df = df_all_data.dropna()
 
 
-# Testframe für Streamlit: 1. Januar 2023
-january_1_2023 = df[(df["STARTTIME"].dt.year == 2023) & (df["STARTTIME"].dt.month == 1) & (df["STARTTIME"].dt.day == 1)]
+day_input = st.date_input("Wähle ein Datum:",
+                      value=pd.to_datetime("2023-01-01"),
+                      min_value=pd.to_datetime("2020-01-01"),
+                      max_value=pd.to_datetime("2023-12-31"))
 
-january_1_2023_folium = january_1_2023.dropna()
-
-# Geopandas-geometry, wird nicht benötigt
-# geo_start = gpd.points_from_xy(x=january_1_2023['STARTLON'], crs="EPSG:4326", y=january_1_2023['STARTLAT'])
-# gdf_start_jan_1_2023 = gpd.GeoDataFrame(january_1_2023, geometry=geo_start)
+chosen_day = df[(df["STARTTIME"].dt.year == day_input.year) & (df["STARTTIME"].dt.month == day_input.month) & (df["STARTTIME"].dt.day == day_input.day)].dropna().copy()
 
 # Initialisiere die Karte mit Zentrum bei Mittelwerten von Breiten- und Längengrad
-map_center = [january_1_2023_folium['STARTLAT'].mean(), january_1_2023_folium['STARTLON'].mean()]
-my_map = folium.Map(location=map_center, zoom_start=13)
+map_center = [48.137154, 11.576124] # Munich city centre
+my_map = folium.Map(location=map_center, zoom_start=12)
 
+
+if st.checkbox("Startpunkte"):
 # Hinzufügen von Punkten für Ausleihort
-for index, row in january_1_2023_folium.iterrows():
-    folium.CircleMarker(location=[row["STARTLAT"], row["STARTLON"]],
-                        radius=1.3,
-                        color="purple",
-                        fill=True,
-                        fill_color="purple",
-                        fill_opacity=0.5
-                        ).add_to(my_map)
+    for index, row in chosen_day.iterrows():
+        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
+        end_coordinates = [row["ENDLAT"], row["ENDLON"]]
+        folium.Circle(location=start_coordinates,
+                            radius=20,
+                            color="purple",
+                            fill=True,
+                            fill_color="purple",
+                            fill_opacity=0.5
+                            ).add_to(my_map)
 
-#Hinzufügen von Punkten für Rückgabeort    
-for index, row in january_1_2023_folium.iterrows():
-    folium.CircleMarker(location=[row["ENDLAT"], row["ENDLON"]],
-                        radius=1.3,
-                        color="green",
-                        fill=True,
-                        fill_color="green",
-                        fill_opacity=0.5
-                        ).add_to(my_map)
+if st.checkbox("Endpunkte"):
+#Hinzufügen von Punkten für Rückgabeort
+    for index, row in chosen_day.iterrows():
+        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
+        end_coordinates = [row["ENDLAT"], row["ENDLON"]]   
+        folium.Circle(location=end_coordinates,
+                            radius=20,
+                            color="green",
+                            fill=True,
+                            fill_color="green",
+                            fill_opacity=0.5
+                            ).add_to(my_map)
+
+if st.checkbox("Strecke (Luftlinie)"):
+# Hinzufügen einer Linie zwischen Start- und Rückgabeort
+    for index, row in chosen_day.iterrows():
+        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
+        end_coordinates = [row["ENDLAT"], row["ENDLON"]]
+        folium.PolyLine(locations=[start_coordinates, end_coordinates],
+                        color="grey",
+                        weight=2.5,
+                        opacity=0.3).add_to(my_map)
     
 
 # Lade die GeoJSON-Datei der Stadtviertel
 city_districts = gpd.read_file("neighbourhoods.geojson")
 
+
+if st.checkbox("Stadtviertel"):
 # Füge die Stadtviertel als GeoJSON auf die Karte hinzu
-folium.GeoJson(
-    city_districts,
-    name="Stadtviertel",
-    style_function=lambda feature: {
-        'fillColor': 'lightblue',  # Füllfarbe der Stadtviertel
-        'color': 'blue',  # Randfarbe
-        'weight': 2,  # Randstärke
-        'opacity': 0.6,  # Rand-Opazität
-        'fillOpacity': 0.2  # Füll-Opazität
-    }
-).add_to(my_map)
+    folium.GeoJson(
+        city_districts,
+        name="Stadtviertel",
+        style_function=lambda feature: {
+            'fillColor': 'lightblue',  # Füllfarbe der Stadtviertel
+            'color': 'blue',
+            'weight': 2,
+            'opacity': 0.3,
+            'fillOpacity': 0.2
+        }
+    ).add_to(my_map)
 
 
-map_html = my_map._repr_html_()
+# Lade die GeoJSON-Datei der City Area
+city_area = gpd.read_file("city_area.geojson")
 
-html(map_html, width=1000, height=800)
+if st.checkbox("Stadtbereich", help="Bereich, in dem Fahrräder auch abseits von Stationen zurückgegeben werden können"):
+# Füge die City Area auf die Karte hinzu
+    folium.GeoJson(
+        city_area,
+        name="Stadtbereich",
+        style_function=lambda feature: {
+            'fillColor': 'lightgreen',  # Füllfarbe der City Area
+            'color': 'green',
+            'weight': 2,
+            'opacity': 0.6,
+            'fillOpacity': 0.25
+        }
+    ).add_to(my_map)
+
+
+# map_html = my_map._repr_html_()
+
+# Uncomment zum Anzeigen der Karte:
+# html(map_html, width=1000, height=800)
+
+st_folium(my_map, width=700)

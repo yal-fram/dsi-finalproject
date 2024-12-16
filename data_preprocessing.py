@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import geopandas as gpd
+from shapely.geometry import shape
 
 ## Formatting Functions
 
@@ -40,6 +42,26 @@ def to_datetime(df, column_start="STARTTIME", column_end="ENDTIME"):
     #> datetime; ungültige Einträge: NaT 
     df[column_start] = pd.to_datetime(df[column_start], errors='coerce')
     df[column_end] = pd.to_datetime(df[column_end], errors='coerce')
+
+    return df
+
+
+# Funktion zur Entfernung ungültiger Daten
+"""
+Removes invalid (STARTTIME and ENDTIME)
+
+Parameters:
+-df(pd.DataFrame): Input DataFrame.
+-column_start(str): Name of column for start time.
+-column_end(str): Name of column for end time.
+
+Returns:
+pd.DataFrame: Cleaned DataFrame with validated dates.
+"""
+def remove_invalid_datetime(df, column_start="STARTTIME", column_end="ENDTIME"):
+    #Entferne Zeilen, bei denen ENDTIME < STARTTIME oder einer von beiden NaT ist
+    df = df[df[column_end] >= df[column_start]]
+    df = df.dropna(subset=[column_start, column_end])
 
     return df
 
@@ -194,46 +216,78 @@ def fill_is_station_values(df:pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Hinzufügen von Stadtvierteln, in denen die Start- und Endpunkte jeweils liegen
+def add_city_district(df:pd.DataFrame) -> pd.DataFrame:
+    """Takes DataFrame, adds city districts for start and end in new columns
+
+    Args:
+        df (pd.DataFrame): DataFrame with STARTLAT, STARTLON, ENDLAT, ENDLON data
+
+    Returns:
+        pd.DataFrame: modified DataFrame with added CITY_DISTRICT_START and CITY_DISTRICT_END columns
+    """
+    # Einlesen der 
+    city_districts = gpd.read_file("neighbourhoods.geojson") # Stadtviertel-geojson, von AirBNB
+
+    # Erstelle zwei Geometrien für Start- und Endpunkte
+    geo_start = gpd.points_from_xy(x=df['STARTLON'], crs="EPSG:4326", y=df['STARTLAT'])
+    geo_end = gpd.points_from_xy(x=df['ENDLON'], crs="EPSG:4326", y=df['ENDLAT'])
+
+    # Erstelle zwei GeoDataFrames (ein GeoDataFrame nimmt immer nur eine Geometrie an) für Start- und Endpunkte
+    gdf_start = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_start)
+    gdf_end = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_end)
+
+    # Führe einen Spatial Join durch, um das Stadtviertel für den Endpunkt zu finden
+    gdf_start_join = gpd.sjoin(gdf_start, city_districts[['geometry', 'neighbourhood']], how="left", predicate='within', rsuffix='_start')
+    gdf_end_join = gpd.sjoin(gdf_end, city_districts[['geometry', 'neighbourhood']], how="left", predicate='within', rsuffix='_end')
+
+    # Füge die Resultatspalten dem DataFrame hinzu
+    df['CITY_DISTRICT_START'] = gdf_start_join["neighbourhood"]
+    df['CITY_DISTRICT_END'] = gdf_end_join["neighbourhood"]
+
+    return df
+
+
 ## Funktion, um zu bestimmen, ob Koordinaten in Stadtgebiet liegen
 
-def set_station_city_status(df:pd.DataFrame) -> pd.DataFrame:
-    """Checks, if station is in city area or not. Takes whole dataframe and returns modified dataframe. Adds two columns, for RENTAL and RETURN stations.
+def add_city_status(df:pd.DataFrame) -> pd.DataFrame:
+    """Checks, if start or end is in city area or not. Takes whole dataframe and returns modified dataframe. Adds two columns, for RENTAL and RETURN stations.
     City area: bikes can be returned anywhere, not just at a station.
 
     Args:
-        df (pd.DataFrame): dataframe with RENTAL_STATION_NAME, STARTLAT and STARTLON; RETURN_STATION_NAME, ENDLAT and ENDLON columns.
+        df (pd.DataFrame): dataframe with STARTLAT and STARTLON, ENDLAT and ENDLON columns.
 
     Returns:
-        pd.DataFrame: modified dataframe with two additional columns for stations' city status
+        pd.DataFrame: modified dataframe with two additional columns for city status
     """
-    # Set value to 1, where station in city
-    df.loc[(df["RENTAL_STATION_NAME"] != '')\
-      & (48.08470 < df["STARTLAT"]) & (df["STARTLAT"] < 48.19058) \
-      & (11.50238 < df["STARTLON"]) & (df["STARTLON"] < 11.65070),\
-      "RENTAL_STATION_IS_CITY"] = 1
+    city_area = gpd.read_file("city_area.geojson") # city-area-geojson, selbst erstellt auf geojson.io, per Augenmaß anhand der in der MVGO-App ersichtlichen Ränder der city area
 
-    # Set value to 0, where station not in city
-    df.loc[(df["RENTAL_STATION_NAME"] != '')\
-      & df["RENTAL_STATION_IS_CITY"].isnull(),
-      "RENTAL_STATION_IS_CITY"] = 0
-    
-    # repeat for RETURN stations
-    df.loc[(df["RETURN_STATION_NAME"] != '')\
-      & (48.08470 < df["ENDLAT"]) & (df["ENDLAT"] < 48.19058) \
-      & (11.50238 < df["ENDLON"]) & (df["ENDLON"] < 11.65070),\
-      "RETURN_STATION_IS_CITY"] = 1
-    
-    df.loc[(df["RETURN_STATION_NAME"] != '')\
-      & df["RETURN_STATION_IS_CITY"].isnull(),
-      "RETURN_STATION_IS_CITY"] = 0
-    
-    # handle exceptional stations, which are on the wrong side of the line (dvs. inside given coordinates, but not city area and vice versa)
-    outside_stations = ["Bahnhof Perlach", "Neuperlach Süd", "Kreillerstraße", "Quiddestraße", "Plettstraße", "Karl-Marx-Zentrum"]
-    inside_stations = ["Botanischer Garten", "Amalienburgstraße", "Großhesseloher Brücke", "BR Studio München-Freimann", "Am Bahnhof Unterföhring"]
+    # Erstelle zwei Geometrien für Start- und Endpunkte
+    geo_start = gpd.points_from_xy(x=df['STARTLON'], crs="EPSG:4326", y=df['STARTLAT'])
+    geo_end = gpd.points_from_xy(x=df['ENDLON'], crs="EPSG:4326", y=df['ENDLAT'])
 
-    # df.loc[(df["RENTAL_STATION_NAME"].any(outside_stations)), "RENTAL_STATION_IS_CITY"] = 0
-    # df.loc[(df["RETURN_STATION_NAME"] in inside_stations), "RETURN_STATION_IS_CITY"] = 0
-    # df.loc[(df["RENTAL_STATION_NAME"] in outside_stations), "RENTAL_STATION_IS_CITY"] = 1
-    # df.loc[(df["RETURN_STATION_NAME"] in inside_stations), "RETURN_STATION_IS_CITY"] = 1    
+    # Erstelle zwei GeoDataFrames (ein GeoDataFrame nimmt immer nur eine Geometrie an) für Start- und Endpunkte
+    gdf_start = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_start)
+    gdf_end = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_end)
+
+    # Casten der Geometrie in synchrones Format
+    gdf_city_start = gdf_start.to_crs(epsg=4326)
+    gdf_city_end = gdf_end.to_crs(epsg=4326)
+
+    # Erstellen eines Shapely Polygons
+    polygon = shape(city_area["geometry"][0])
+
+    # Prüfen, ob Punkte in Polygon liegen, speichern in neuer Spalte
+    gdf_city_start["RENTAL_IS_CITY"] = gdf_start["geometry"].within(polygon)
+    gdf_city_end["RETURN_IS_CITY"] = gdf_end["geometry"].within(polygon)
+    gdf_city_start.head()
+
+    # Hinzufügen der Resultatspalten zu DataFrame
+    df['RENTAL_IS_CITY'] = gdf_city_start["RENTAL_IS_CITY"]
+    df['RETURN_IS_CITY'] = gdf_city_end["RETURN_IS_CITY"]
+
+    # Wahrheitswerte zu Integers umcasten
+    df['RENTAL_IS_CITY'] = df['RENTAL_IS_CITY'].astype('Int64')
+    df['RETURN_IS_CITY'] = df['RETURN_IS_CITY'].astype('Int64') 
 
     return df
