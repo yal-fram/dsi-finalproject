@@ -11,6 +11,10 @@ import streamlit as st
 # from streamlit.components.v1 import html
 from streamlit_folium import st_folium
 
+import plotly.express as px
+from prophet import Prophet
+from prophet.plot import plot_plotly, plot_components_plotly
+import plotly.graph_objs as go
 
 @st.cache_data
 def read_files(start_year=2020, end_year=2024):
@@ -161,3 +165,55 @@ if st.checkbox("Stadtbereich", help="Bereich, in dem Fahrräder auch abseits von
 # html(map_html, width=1000, height=800)
 
 st_folium(my_map, width=700)
+
+# Zeitreihenanalyse mit Plotly und Prophet
+# Extrahieren von Date / Hour
+df['DATE'] = df['STARTTIME'].dt.date  # Datum extrahieren
+df['HOUR'] = df['STARTTIME'].dt.hour  # Stunde extrahieren
+
+# Anzahl der Fahrten pro Tag
+daily_counts = df.groupby('DATE').size().reset_index(name='DAILY_COUNTS')
+
+# Linienplot der täglichen Anzahl der Fahrten
+fig_daily = px.line(
+    daily_counts,
+    x='DATE',
+    y='DAILY_COUNTS',
+    title='Tägliche Anzahl der Fahrten (2020-2023)',
+    labels={'DAILY_COUNTS': 'Fahrten', 'DATE': 'Datum'},
+    template="plotly_white"
+)
+
+# Titel in die Mitte setzen
+fig_daily.update_layout(
+    title={
+        'text': "Tägliche Anzahl der Fahrten (2020-2023)",
+        'y': 0.9,  # Y-Position des Titels
+        'x': 0.5,  # X-Position des Titels
+        'xanchor': 'center',
+        'yanchor': 'top',
+        'font': dict(size=24)
+    }
+)
+
+# Prophet-Modell initialisieren
+prophet_data = daily_counts.rename(columns={'DATE': 'ds', 'DAILY_COUNTS': 'y'})
+model = Prophet(growth='linear', seasonality_mode='additive', interval_width=0.90)
+model.fit(prophet_data)
+
+# Zukunftsdaten erstellen und Vorhersage
+future = model.make_future_dataframe(periods=365, freq='D', include_history=True)
+forecast = model.predict(future)
+
+# Prophet-Visualisierung
+fig_forecast = plot_plotly(model, forecast)
+fig_components = plot_components_plotly(model, forecast)
+
+# Streamlit-Anzeige
+st.sidebar.header("Zeitreihendanalyse:")
+if st.sidebar.button("Tägliche Anzahl der Fahrten"):
+    st.plotly_chart(fig_daily, use_container_width=True)
+
+if st.sidebar.button("Prophet-Vorhersage"):
+    st.plotly_chart(fig_forecast, use_container_width=True)
+    st.plotly_chart(fig_components, use_container_width=True)
