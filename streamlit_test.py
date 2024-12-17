@@ -1,20 +1,21 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-
+# import matplotlib.pyplot as plt
 import geopandas as gpd
-# import osmnx as ox
-# import contextily as cx
 import data_preprocessing as dp
 import folium
 import streamlit as st
 # from streamlit.components.v1 import html
 from streamlit_folium import st_folium
+from datetime import time, timedelta, datetime, date
 
+start_year = 2020
+end_year = 2023
 
 @st.cache_data
-def read_files(start_year=2020, end_year=2024):
-    years = range(start_year, end_year)
+# Einlesen der Dateien
+def read_files(start_year=2020, end_year=2023):
+    years = range(start_year, end_year + 1)
     data_list = []
     # Schleife über jedes Jahr
     for year in years:
@@ -64,100 +65,184 @@ def format_files(df):
     return df
 
 # Removing data with NULL values
-
-df_all_data = format_files(read_files())
+df_all_data = format_files(read_files(start_year=start_year, end_year=end_year))
 df = df_all_data.dropna()
 
-
-day_input = st.date_input("Wähle ein Datum:",
-                      value=pd.to_datetime("2023-01-01"),
-                      min_value=pd.to_datetime("2020-01-01"),
-                      max_value=pd.to_datetime("2023-12-31"))
-
-chosen_day = df[(df["STARTTIME"].dt.year == day_input.year) & (df["STARTTIME"].dt.month == day_input.month) & (df["STARTTIME"].dt.day == day_input.day)].dropna().copy()
-
-# Initialisiere die Karte mit Zentrum bei Mittelwerten von Breiten- und Längengrad
-map_center = [48.137154, 11.576124] # Munich city centre
-my_map = folium.Map(location=map_center, zoom_start=12)
-
-
-if st.checkbox("Startpunkte"):
-# Hinzufügen von Punkten für Ausleihort
-    for index, row in chosen_day.iterrows():
-        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
-        end_coordinates = [row["ENDLAT"], row["ENDLON"]]
-        folium.Circle(location=start_coordinates,
-                            radius=20,
-                            color="purple",
-                            fill=True,
-                            fill_color="purple",
-                            fill_opacity=0.5
-                            ).add_to(my_map)
-
-if st.checkbox("Endpunkte"):
-#Hinzufügen von Punkten für Rückgabeort
-    for index, row in chosen_day.iterrows():
-        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
-        end_coordinates = [row["ENDLAT"], row["ENDLON"]]   
-        folium.Circle(location=end_coordinates,
-                            radius=20,
-                            color="green",
-                            fill=True,
-                            fill_color="green",
-                            fill_opacity=0.5
-                            ).add_to(my_map)
-
-if st.checkbox("Strecke (Luftlinie)"):
-# Hinzufügen einer Linie zwischen Start- und Rückgabeort
-    for index, row in chosen_day.iterrows():
-        start_coordinates = [row["STARTLAT"], row["STARTLON"]]
-        end_coordinates = [row["ENDLAT"], row["ENDLON"]]
-        folium.PolyLine(locations=[start_coordinates, end_coordinates],
-                        color="grey",
-                        weight=2.5,
-                        opacity=0.3).add_to(my_map)
-    
 
 # Lade die GeoJSON-Datei der Stadtviertel
 city_districts = gpd.read_file("neighbourhoods.geojson")
 
-
-if st.checkbox("Stadtviertel"):
-# Füge die Stadtviertel als GeoJSON auf die Karte hinzu
-    folium.GeoJson(
-        city_districts,
-        name="Stadtviertel",
-        style_function=lambda feature: {
-            'fillColor': 'lightblue',  # Füllfarbe der Stadtviertel
-            'color': 'blue',
-            'weight': 2,
-            'opacity': 0.3,
-            'fillOpacity': 0.2
-        }
-    ).add_to(my_map)
-
-
 # Lade die GeoJSON-Datei der City Area
 city_area = gpd.read_file("city_area.geojson")
 
-if st.checkbox("Stadtbereich", help="Bereich, in dem Fahrräder auch abseits von Stationen zurückgegeben werden können"):
-# Füge die City Area auf die Karte hinzu
-    folium.GeoJson(
-        city_area,
-        name="Stadtbereich",
-        style_function=lambda feature: {
-            'fillColor': 'lightgreen',  # Füllfarbe der City Area
-            'color': 'green',
-            'weight': 2,
-            'opacity': 0.6,
-            'fillOpacity': 0.25
+# Session State für die Karte initialisieren
+if "show_map" not in st.session_state:
+    st.session_state.show_map = False
+
+chosen_depth = st.selectbox("Welchen Zeitraum möchtest du betrachten?", ("Jahre", "Monate", "Tage"), index=None, placeholder="Zeitraum auswählen")
+
+if chosen_depth == "Monate":
+
+    # Session State initialisieren
+    if "map_config" not in st.session_state:
+        st.session_state.map_config = {
+            "show_startpoints": False,
+            "show_endpoints": False,
+            "show_lines": False,
+            "show_city_districts": False,
+            "show_city_area": False
         }
-    ).add_to(my_map)
+    if "chosen_time_data" not in st.session_state:
+        st.session_state.chosen_time_data = None
+
+    year_input = st.multiselect("Wähle die Jahre aus:",                            
+                            list(range(start_year, end_year + 1)))
+    
+    month_input = st.multiselect("Wähle die Monate aus:",
+                                 list(range(1, 13)))
+    st.write(year_input)
+    st.write(month_input)
+    st.write("Mehr passiert hier gerade noch nicht!")
+
+if chosen_depth == "Tage":
+
+    # Session State initialisieren
+    if "map_config" not in st.session_state:
+        st.session_state.map_config = {
+            "show_startpoints": False,
+            "show_endpoints": False,
+            "show_lines": False,
+            "show_city_districts": False,
+            "show_city_area": False
+        }
+    if "chosen_time_data" not in st.session_state:
+        st.session_state.chosen_time_data = None
+
+    # Auswahl des Startdatums
+    day_input_start = st.date_input("Wähle ein Startdatum:",
+                        value=date(2023,12,31),
+                        min_value=date(2020, 1, 1),
+                        max_value=date(2023, 12, 31))
+
+    # Auswahl des Enddatums
+    day_input_end = st.date_input("Wähle ein Enddatum:",
+                        value=date(2023,12,31),
+                        min_value=date(2020, 1, 1),
+                        max_value=date(2023, 12, 31))
+    
+    # Prüfen der Daten auf Gültigkeit
+    if day_input_end < day_input_start:
+        st.write("Das Enddatum muss nach dem Startdatum liegen.")
+        valid = False
+    elif day_input_end - day_input_start >= timedelta(days=7):
+        st.write("Es können nicht mehr als 7 Tage ausgewählt werden.")
+        valid = False
+    else:
+        valid = True
+
+    # Auswahl des Zeitraums
+    daytime_input = st.slider("Wähle die Tageszeit:",
+                            min_value=time(0),
+                            max_value=time(23, 59, 59),
+                            value=(time(0), time(23, 59, 59)),
+                            step=timedelta(hours=1))
+
+    # speichert gewünschten Zeitraum in einer Variablen
+    # chosen_time = (datetime.combine(day_input_start, daytime_input[0]), datetime.combine(day_input_end, daytime_input[1]))
+    if valid:
 
 
-# map_html = my_map._repr_html_()
+        st.write("Was soll auf der Karte angezeigt werden?")
+        show_startpoints = st.checkbox("Startpunkte", value=st.session_state.map_config["show_startpoints"])
+        show_endpoints = st.checkbox("Endpunkte", value=st.session_state.map_config["show_endpoints"])
+        show_lines = st.checkbox("Strecke (Luftlinie)", value=st.session_state.map_config["show_lines"])
+        show_city_districts = st.checkbox("Stadtviertel", value=st.session_state.map_config["show_city_districts"])
+        show_city_area = st.checkbox("Stadtbereich", value=st.session_state.map_config["show_city_area"],
+                                     help="Bereich, in dem Fahrräder auch abseits von Stationen zurückgegeben werden können")
 
-# Uncomment zum Anzeigen der Karte:
-# html(map_html, width=1000, height=800)
 
-st_folium(my_map, width=700)
+        if st.button("Hier klicken für Auswertung und Aktualisierung der Karte"):
+            # Speichern des DataFrames im Session State
+            st.session_state.chosen_time_data = df[(((df["STARTTIME"].dt.date >= day_input_start) & (df["STARTTIME"].dt.date <= day_input_end))\
+                            | ((df["ENDTIME"].dt.date >= day_input_start) & (df["ENDTIME"].dt.date <= day_input_end)))\
+                            & (((df["STARTTIME"].dt.time >= daytime_input[0]) & (df["STARTTIME"].dt.time <= daytime_input[1]))
+                            | ((df["ENDTIME"].dt.time >= daytime_input[0]) & (df["ENDTIME"].dt.time <= daytime_input[1])))].dropna().copy()
+            
+            # Speichern der Checkbox-Werte im Session State
+            st.session_state.map_config["show_startpoints"] = show_startpoints
+            st.session_state.map_config["show_endpoints"] = show_endpoints
+            st.session_state.map_config["show_lines"] = show_lines
+            st.session_state.map_config["show_city_districts"] = show_city_districts
+            st.session_state.map_config["show_city_area"] = show_city_area
+            
+            st.session_state.show_map = True
+        
+        # Zeige die Karte nur, wenn "show_map" True ist
+        if st.session_state.show_map and st.session_state.chosen_time_data is not None:
+
+            # Initialisieren der Karte
+            map_center = [48.137154, 11.576124] # Munich city centre
+            munich_map = folium.Map(location=map_center, zoom_start=12)
+            
+            for index, row in st.session_state.chosen_time_data.iterrows():
+                start_coordinates = [row["STARTLAT"], row["STARTLON"]]
+                end_coordinates = [row["ENDLAT"], row["ENDLON"]]
+
+                # Hinzufügen der Startpunkte
+                if st.session_state.map_config["show_startpoints"]:
+                    folium.Circle(location=start_coordinates,
+                                        radius=20,
+                                        color="purple",
+                                        fill=True,
+                                        fill_color="purple",
+                                        fill_opacity=0.5
+                                        ).add_to(munich_map)
+                
+                # Hinzufügen der Endpunkte
+                if st.session_state.map_config["show_endpoints"]: 
+                        folium.Circle(location=end_coordinates,
+                                            radius=20,
+                                            color="green",
+                                            fill=True,
+                                            fill_color="green",
+                                            fill_opacity=0.5
+                                            ).add_to(munich_map)
+                
+                # Hinzufügen einer Linie zwischen Start- und Rückgabeort
+                if st.session_state.map_config["show_lines"]:
+                        folium.PolyLine(locations=[start_coordinates, end_coordinates],
+                                        color="grey",
+                                        weight=2.5,
+                                        opacity=0.3).add_to(munich_map)
+                
+            # Füge die Stadtviertel als GeoJSON auf der Karte hinzu
+            if st.session_state.map_config["show_city_districts"]:
+                folium.GeoJson(
+                    city_districts,
+                    name="Stadtviertel",
+                    style_function=lambda feature: {
+                        "fillColor": "lightblue",  # Füllfarbe der Stadtviertel
+                        "color": "blue",
+                        "weight": 2,
+                        "opacity": 0.3,
+                        "fillOpacity": 0.2
+                    }
+                ).add_to(munich_map)
+
+                # Füge den Stadtbereich als GeoJSON auf der Karte hinzu
+            if st.session_state.map_config["show_city_area"]:
+                folium.GeoJson(
+                    city_area,
+                    name="Stadtbereich",
+                    style_function=lambda feature: {
+                        "fillColor": "lightgreen",  # Füllfarbe des Stadtbereichs
+                        "color": "green",
+                        "weight": 2,
+                        "opacity": 0.6,
+                        "fillOpacity": 0.25
+                    }
+                ).add_to(munich_map)
+            
+            # Anzeigen der Karte
+            st_folium(munich_map, width=700)
+            st.write(st.session_state.chosen_time_data)

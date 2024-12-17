@@ -187,9 +187,9 @@ def handle_is_station(df:pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: modified DataFrame
     """
     df["RENTAL_IS_STATION"] = df["RENTAL_IS_STATION"].apply(format_is_station)
-    df['RENTAL_IS_STATION'] = df['RENTAL_IS_STATION'].astype('Int64')
+    df["RENTAL_IS_STATION"] = df["RENTAL_IS_STATION"].astype("Int64")
     df["RETURN_IS_STATION"] = df["RETURN_IS_STATION"].apply(format_is_station)
-    df['RETURN_IS_STATION'] = df['RETURN_IS_STATION'].astype('Int64')
+    df["RETURN_IS_STATION"] = df["RETURN_IS_STATION"].astype("Int64")
 
     return df
 
@@ -230,20 +230,20 @@ def add_city_district(df:pd.DataFrame) -> pd.DataFrame:
     city_districts = gpd.read_file("neighbourhoods.geojson") # Stadtviertel-geojson, von AirBNB
 
     # Erstelle zwei Geometrien für Start- und Endpunkte
-    geo_start = gpd.points_from_xy(x=df['STARTLON'], crs="EPSG:4326", y=df['STARTLAT'])
-    geo_end = gpd.points_from_xy(x=df['ENDLON'], crs="EPSG:4326", y=df['ENDLAT'])
+    geo_start = gpd.points_from_xy(x=df["STARTLON"], crs="EPSG:4326", y=df["STARTLAT"])
+    geo_end = gpd.points_from_xy(x=df["ENDLON"], crs="EPSG:4326", y=df["ENDLAT"])
 
     # Erstelle zwei GeoDataFrames (ein GeoDataFrame nimmt immer nur eine Geometrie an) für Start- und Endpunkte
     gdf_start = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_start)
     gdf_end = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_end)
 
     # Führe einen Spatial Join durch, um das Stadtviertel für den Endpunkt zu finden
-    gdf_start_join = gpd.sjoin(gdf_start, city_districts[['geometry', 'neighbourhood']], how="left", predicate='within', rsuffix='_start')
-    gdf_end_join = gpd.sjoin(gdf_end, city_districts[['geometry', 'neighbourhood']], how="left", predicate='within', rsuffix='_end')
+    gdf_start_join = gpd.sjoin(gdf_start, city_districts[["geometry", "neighbourhood"]], how="left", predicate="within", rsuffix="_start")
+    gdf_end_join = gpd.sjoin(gdf_end, city_districts[["geometry", "neighbourhood"]], how="left", predicate="within", rsuffix="_end")
 
     # Füge die Resultatspalten dem DataFrame hinzu
-    df['CITY_DISTRICT_START'] = gdf_start_join["neighbourhood"]
-    df['CITY_DISTRICT_END'] = gdf_end_join["neighbourhood"]
+    df["CITY_DISTRICT_START"] = gdf_start_join["neighbourhood"]
+    df["CITY_DISTRICT_END"] = gdf_end_join["neighbourhood"]
 
     return df
 
@@ -263,8 +263,8 @@ def add_city_status(df:pd.DataFrame) -> pd.DataFrame:
     city_area = gpd.read_file("city_area.geojson") # city-area-geojson, selbst erstellt auf geojson.io, per Augenmaß anhand der in der MVGO-App ersichtlichen Ränder der city area
 
     # Erstelle zwei Geometrien für Start- und Endpunkte
-    geo_start = gpd.points_from_xy(x=df['STARTLON'], crs="EPSG:4326", y=df['STARTLAT'])
-    geo_end = gpd.points_from_xy(x=df['ENDLON'], crs="EPSG:4326", y=df['ENDLAT'])
+    geo_start = gpd.points_from_xy(x=df["STARTLON"], crs="EPSG:4326", y=df["STARTLAT"])
+    geo_end = gpd.points_from_xy(x=df["ENDLON"], crs="EPSG:4326", y=df["ENDLAT"])
 
     # Erstelle zwei GeoDataFrames (ein GeoDataFrame nimmt immer nur eine Geometrie an) für Start- und Endpunkte
     gdf_start = gpd.GeoDataFrame(df[["STARTLAT", "STARTLON"]], geometry=geo_start)
@@ -283,11 +283,11 @@ def add_city_status(df:pd.DataFrame) -> pd.DataFrame:
     gdf_city_start.head()
 
     # Hinzufügen der Resultatspalten zu DataFrame
-    df['RENTAL_IS_CITY'] = gdf_city_start["RENTAL_IS_CITY"]
-    df['RETURN_IS_CITY'] = gdf_city_end["RETURN_IS_CITY"]
+    df["RENTAL_IS_CITY"] = gdf_city_start["RENTAL_IS_CITY"]
+    df["RETURN_IS_CITY"] = gdf_city_end["RETURN_IS_CITY"]
 
     # Wahrheitswerte zu Integers umcasten
-    df['RENTAL_IS_CITY'] = df['RENTAL_IS_CITY'].astype('Int64')
-    df['RETURN_IS_CITY'] = df['RETURN_IS_CITY'].astype('Int64') 
+    df["RENTAL_IS_CITY"] = df["RENTAL_IS_CITY"].astype("Int64")
+    df["RETURN_IS_CITY"] = df["RETURN_IS_CITY"].astype("Int64") 
 
     return df
