@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import shape
+from geopy.distance import geodesic
 
 ## Formatting Functions
 
@@ -289,5 +290,35 @@ def add_city_status(df:pd.DataFrame) -> pd.DataFrame:
     # Wahrheitswerte zu Integers umcasten
     df["RENTAL_IS_CITY"] = df["RENTAL_IS_CITY"].astype("Int64")
     df["RETURN_IS_CITY"] = df["RETURN_IS_CITY"].astype("Int64") 
+
+    return df
+
+
+# Wird zur Berechnung der Distanzen benötigt:
+def calculate_geodesic(row):
+    """Calculates geodesic distance for two Points. Takes DataFrame row as argument and returns distance in kilometres. To be applied with df.apply.
+
+    Args:
+        row: row of Pandas DataFrame
+
+    Returns:
+        distance: geodesic distance in kilometres
+    """
+    start_point = (row["STARTLAT"], row["STARTLON"])  # erst Breitengrad, dann Längengrad
+    end_point = (row["ENDLAT"], row["ENDLON"])
+    
+    return geodesic(start_point, end_point).kilometers
+
+
+def calculate_distance(df:pd.DataFrame) -> pd.DataFrame:
+    """Takes DataFrame with two GeoPoints and calculates distance between them in metres, convertes into kilometres. Returns modified DataFrame.
+
+    Args:
+        df (pd.DataFrame): DataFrame with STARTLAT and STARTLON, ENDLAT and ENDLON columns
+
+    Returns:
+        pd.DataFrame: Modified DataFrame with added DISTANCE column in kilometres
+    """
+    df['DISTANCE'] = df.apply(calculate_geodesic, axis=1)
 
     return df
