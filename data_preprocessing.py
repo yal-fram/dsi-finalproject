@@ -3,6 +3,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import shape
 from geopy.distance import geodesic
+import streamlit as st
 
 ## Formatting Functions
 
@@ -322,3 +323,58 @@ def calculate_distance(df:pd.DataFrame) -> pd.DataFrame:
     df['DISTANCE'] = df.apply(calculate_geodesic, axis=1)
 
     return df
+
+
+def get_station_data(df:pd.DataFrame) -> dict:
+    """Takes DataFrame and extracts Station Data, i.e. Latitude and Longitude. Returns dict with Station names as keys and Station geodata as values in list.
+
+    Args:
+        df (pd.DataFrame): DataFrame with columns RENTAL_IS_STATION, RETURN_IS_STATION, RENTAL_STATION_NAME, RETURN_STATION_NAME, STARTLAT, STARTLON, ENDLAT, ENDLON
+
+    Returns:
+        dict: {station name: [latitude, longitude]}
+    """
+    station_df = df[(df["RENTAL_IS_STATION"] == 1) | (df["RETURN_IS_STATION"] == 1)]\
+        [["STARTLAT", "STARTLON", "ENDLAT", "ENDLON", "RENTAL_STATION_NAME", "RETURN_STATION_NAME"]].copy()
+    station_data = dict()
+    for _, row in station_df.iterrows():
+        if row["RENTAL_STATION_NAME"] not in station_data.keys():
+            station_data[row["RENTAL_STATION_NAME"]] = [row["STARTLAT"], row["STARTLON"]]
+        if row["RETURN_STATION_NAME"] not in station_data.keys():
+            station_data[row["RETURN_STATION_NAME"]] = [row["ENDLAT"], row["ENDLON"]]
+    station_data.pop("")
+    return station_data
+
+
+def get_heatmap_data(df:pd.DataFrame, station_data:dict) -> list:
+    """Used to retrieve data for Folium Heatmap. Takes DataFrame and Dictionary with station_data.
+    Determines usage figure of stations with returns and rentals combined to be used as a weight for the HeatMap.
+    Returns a List of lists, ready to feed in the HeatMap function.
+
+    Args:
+        df (pd.DataFrame): DataFrame with columns RENTAL_IS_STATION, RETURN_IS_STATION, RENTAL_STATION_NAME, RETURN_STATION_NAME
+        station_data (dict): Must be of shape {station name: [latitude, longitude]}
+
+    Returns:
+        list: List of Shape [[latitude, longitude, count/weight], [...]] to be used for Folium HeatMap
+    """
+    heat_data_list_start = df[(df["RENTAL_IS_STATION"] == 1)].groupby(["RENTAL_STATION_NAME"]).size().reset_index(name="counts").values.tolist()
+    # Anzahl der Zeilen (also der Rückgabevorgänge) je nach RETURN STATION, gespeichert in einer Liste
+    heat_data_list_end = df[(df["RETURN_IS_STATION"] == 1)].groupby(["RETURN_STATION_NAME"]).size().reset_index(name="counts").values.tolist()
+    # Überführen der Startliste in ein Dictionary
+    heat_data_dict = dict(heat_data_list_start)
+    # Speichern der Keys des Dictionarys in einer Variablen, um ...
+    heat_keys = heat_data_dict.keys()
+
+    # ... die Anzahl der Rückgabevorgänge für jede Station zu addieren oder im Dictionary zu ergänzen
+    for station in heat_data_list_end:
+        if station[0] not in heat_keys:
+            heat_data_dict[station[0]] = station[1]
+        elif station[0] in heat_keys:
+            heat_data_dict[station[0]] += station[1]
+
+    # bringt die Daten für jede Station in das von HeatMap geforderte Format. stat ist ein Dictionary, welches Stationen und deren Koordinaten enthält (wurde weiter oben erstellt)
+    heat_data = [[station_data[station][0], station_data[station][1], heat_data_dict[station]] for station in station_data]
+    # sortiert nach Anzahl. Für den Fall, dass auf die wichtigsten oder unwichtigsten gefiltert werden soll.
+    heat_data_sorted = sorted(heat_data, key=lambda x: x[2], reverse=True)
+    return heat_data_sorted
