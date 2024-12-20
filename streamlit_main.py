@@ -84,8 +84,10 @@ def format_files(df):
     df = df.dropna()
 
     # Hinzufügen der Distanz
-    # dauert ein paar Minuten, uncomment nur, wenn benötigt!
-    df = dp.calculate_distance(df)
+    # dauert ein paar Minuten, uncomment nur, wenn erwünscht!
+    # wird später zur Angabe der mittleren Distanz verwendet
+    # diese Zeilenmüsste dann entsprechend auch ent-kommentiert werden: suche nach "Entfernung" und "DISTANCE"
+    # df = dp.calculate_distance(df)
 
     # Hinzufügen des Stadtviertels
     df = dp.add_city_district(df)
@@ -96,9 +98,7 @@ def format_files(df):
     return df
 
 # Load Dataframe
-with st.spinner(text="Moment, Räder werden geputzt ... 🚲"):
-    df = read_files(start_year=start_year, end_year=end_year)
-    df = format_files(df)
+df = format_files(read_files(start_year=start_year, end_year=end_year))
 
 @st.cache_data
 def load_geojson(geojson):
@@ -135,12 +135,38 @@ if "geo_months" not in st.session_state:
 if "show_map" not in st.session_state:
     st.session_state.show_map = False
 
+# Session States für Monate initialisieren
+if "map_config_months" not in st.session_state:
+    st.session_state.map_config_months = {
+        "show_stations": False,
+        "show_heatmap": False,
+        "show_city_districts": False,
+        "show_city_area": False
+    }
+
+# Session States für Tage initialisieren
+if "map_config_days" not in st.session_state:
+    st.session_state.map_config_days = {
+        "show_startpoints": False,
+        "show_endpoints": False,
+        "show_lines": False,
+        "show_city_districts": False,
+        "show_city_area": False}
+
 def reset_views():
     # st.session_state.geo_years = False
     st.session_state.geo_months = False
     st.session_state.geo_days = False
-    # st.session_state.show_map = False
-
+    st.session_state.show_map = False
+    st.session_state.map_config_months["show_stations"] = False
+    st.session_state.map_config_months["show_heatmap"] = False
+    st.session_state.map_config_months["show_city_districts"] = False
+    st.session_state.map_config_months["show_city_area"] = False
+    st.session_state.map_config_days["show_startpoints"] = False
+    st.session_state.map_config_days["show_endpoints"] = False
+    st.session_state.map_config_days["show_lines"] = False
+    st.session_state.map_config_days["show_city_districts"] = False
+    st.session_state.map_config_days["show_city_area"] = False
 # Streamlit-Titel
 st.header(f":blue[MVG-Mieträder] :bike: :blue[in München {start_year} - {end_year}]")
 
@@ -228,14 +254,7 @@ if st.sidebar.button("Überblick nach Monaten"):
     reset_views()
     st.session_state.geo_months = True
 
-    # Session States für Monate initialisieren
-    if "map_config_months" not in st.session_state:
-        st.session_state.map_config_months = {
-            "show_stations": False,
-            "show_heatmap": False,
-            "show_city_districts": False,
-            "show_city_area": False
-        }
+
     if "chosen_months" not in st.session_state:
         st.session_state.chosen_months = None
 
@@ -244,15 +263,6 @@ if st.sidebar.button("Detailansicht nach Tagen"):
     reset_views()
     st.session_state.geo_days = True
 
-    # Session States für Tage initialisieren
-    if "map_config_days" not in st.session_state:
-        st.session_state.map_config_days = {
-            "show_startpoints": False,
-            "show_endpoints": False,
-            "show_lines": False,
-            "show_city_districts": False,
-            "show_city_area": False
-        }
     if "chosen_days" not in st.session_state:
         st.session_state.chosen_days = None
 
@@ -269,12 +279,12 @@ if st.sidebar.button("Let it snow!", type="primary"):
     unsafe_allow_html=True
     )
     st.snow()
-
+# tagsüber (Tagmodus): rgb(0, 104, 201), abends (Nachtmodus): rgb(96, 180, 255)
 
 
 # Wenn Monate ausgewertet werden sollen
 if st.session_state.geo_months:
-    st.write("Month-Ansicht")
+    # Auswahl der Jahre und Monate
     year_input = st.multiselect("Wähle die Jahre aus:",                            
                             list(range(start_year, end_year + 1)),
                             placeholder="Jahre auswählen")
@@ -283,6 +293,7 @@ if st.session_state.geo_months:
                             placeholder="Monate auswählen")
 
     st.write("Was soll auf der Karte angezeigt werden?")
+    # Auswahl der gewünschten Parameter
     show_stations = st.checkbox("Stationen", value=st.session_state.map_config_months["show_stations"])
     show_heatmap = st.checkbox("Heatmap", value=st.session_state.map_config_months["show_heatmap"])
     show_city_districts = st.checkbox("Stadtviertel", value=st.session_state.map_config_months["show_city_districts"], key="districts_months")
@@ -334,25 +345,35 @@ if st.session_state.geo_months:
 
         # Heatmap
         if st.session_state.map_config_months["show_heatmap"]:
+            # heat-Daten für Stationen:
+            # (geht schneller, umfasst aber nur Stationen)
             # heat_data = dp.get_heatmap_data(st.session_state.chosen_months, stations)
+
+            # heat-Daten für alle Punkte:
+            # (dauert länger, ist aber spannender, da auch mit freien Rückgaben)
             heat_data_start = list(zip(st.session_state.chosen_months["STARTLAT"], st.session_state.chosen_months["STARTLON"]))
             heat_data_end = list(zip(st.session_state.chosen_months["STARTLAT"], st.session_state.chosen_months["STARTLON"]))
             heat_data = heat_data_start + heat_data_end
+
             heat_map = HeatMap(heat_data, min_opacity=0.2, radius=25, blur=18)
             heat_map.add_to(munich_map)
 
         # Hinzufügen der Stationen
         if st.session_state.map_config_months["show_stations"]:
+            # Prüfen, ob Ausleih- und Rückgabewerte für jede Station vorhanden, ansonsten 0 einsetzen (kein Wert vorhanden => Wert = 0)
             for station, coordinates in stations.items():
                 if station not in frequency_start.index.values:
                     frequency_start[station] = 0
                 if station not in frequency_end.index.values:
                     frequency_end[station] = 0
+
+                # Hinzufügen zur Karte    
                 folium.Marker(location=coordinates,
                               icon=folium.Icon(color="darkblue",
                                      icon="bicycle",
                                      prefix="fa"),
-                               tooltip=f"{station} insgesamt {frequency_start[station] + frequency_end[station]}<br>(Ausleihe: {frequency_start[station]}, Rückgabe: {frequency_end[station]})"
+                               tooltip=f"{station}: insgesamt {frequency_start[station] + frequency_end[station]}\
+                                <br>(Ausleihe: {frequency_start[station]}, Rückgabe: {frequency_end[station]})"
                                     ).add_to(munich_map)
             
         # Füge die Stadtviertel als GeoJSON auf der Karte hinzu
@@ -363,7 +384,7 @@ if st.session_state.geo_months:
                 style_function=lambda feature: {
                     "fillColor": "lightblue",  # Füllfarbe der Stadtviertel
                     "color": "blue",
-                    "weight": 2,
+                    "weight": 3,
                     "opacity": 0.3,
                     "fillOpacity": 0.2
                 }
@@ -389,7 +410,7 @@ if st.session_state.geo_months:
         # Weitere Infos
         # Berechnungen
         # Durchschnittliche Dauer
-        avg_length = st.session_state.chosen_months["DURATION"].mean().seconds // 60
+        avg_length = st.session_state.chosen_months["DURATION"].median().seconds // 60
         if avg_length > 60:
             avg_length_str = f"{avg_length // 60} Stunden, {avg_length%60} Minuten"
         else:
@@ -412,8 +433,8 @@ if st.session_state.geo_months:
         col1, col2 = st.columns(2)
         with col1:
             st.write(f"Anzahl Fahrten:")
-            st.write(f"Durchschnittliche Fahrtenlänge:")
-            st.write(f"Durchschnittliche Entfernung (Luftlinie):")
+            st.write(f"Mittlere Fahrtenlänge:")
+            # st.write(f"Mittlere Entfernung (Luftlinie):")
             st.write(f"Beliebtestes Startviertel:")
             st.write(f"Beliebtestes Zielviertel:")
             st.write(f"Stationsausleihen in-/außerhalb des Stadtgebiets:")
@@ -421,7 +442,7 @@ if st.session_state.geo_months:
         with col2:
             st.write(f"{st.session_state.chosen_months.shape[0]}")
             st.write(f"{avg_length_str}")
-            st.write(f"{st.session_state.chosen_months["DISTANCE"].mean():.1f} Kilometer")
+            # st.write(f"{st.session_state.chosen_months["DISTANCE"].median():.1f} Kilometer")
             st.write(f"{st.session_state.chosen_months["CITY_DISTRICT_START"].mode()[0]}")
             st.write(f"{st.session_state.chosen_months["CITY_DISTRICT_END"].mode()[0]}")
             
@@ -537,7 +558,7 @@ if st.session_state.geo_days:
                     style_function=lambda feature: {
                         "fillColor": "lightblue",  # Füllfarbe der Stadtviertel
                         "color": "blue",
-                        "weight": 2,
+                        "weight": 3,
                         "opacity": 0.3,
                         "fillOpacity": 0.2
                     }
@@ -562,7 +583,7 @@ if st.session_state.geo_days:
 
             # Berechnung weiterer Informationen
             # Durchschnittliche Dauer
-            avg_length = st.session_state.chosen_days["DURATION"].mean().seconds // 60
+            avg_length = st.session_state.chosen_days["DURATION"].median().seconds // 60
             if avg_length > 60:
                 avg_length_str = f"{avg_length // 60} Stunden, {avg_length%60} Minuten"
             else:
@@ -583,8 +604,8 @@ if st.session_state.geo_days:
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"Anzahl Fahrten:")
-                st.write(f"Durchschnittliche Fahrtenlänge:")
-                st.write(f"Durchschnittliche Entfernung (Luftlinie):")
+                st.write(f"Mittlere Fahrtenlänge:")
+                # st.write(f"Mittlere Entfernung (Luftlinie):")
                 st.write(f"Beliebtestes Startviertel:")
                 st.write(f"Beliebtestes Zielviertel:")
                 st.write(f"Stationsausleihen in-/außerhalb des Stadtgebiets:")
@@ -592,7 +613,7 @@ if st.session_state.geo_days:
             with col2:
                 st.write(f"{st.session_state.chosen_days.shape[0]}")
                 st.write(f"{avg_length_str}")
-                st.write(f"{st.session_state.chosen_days["DISTANCE"].mean():.1f} Kilometer")
+                # st.write(f"{st.session_state.chosen_days["DISTANCE"].median():.1f} Kilometer")
                 st.write(f"{st.session_state.chosen_days["CITY_DISTRICT_START"].mode()[0]}")
                 st.write(f"{st.session_state.chosen_days["CITY_DISTRICT_END"].mode()[0]}")
                 
