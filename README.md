@@ -9,6 +9,7 @@ MVG-Mieträder in München: geografische Auswertung und Zeitreihenanalyse in Str
 Datasets and Geojson not included here, see links below.
 
 Jupyter Notebooks are for data exploration and testing.
+
 .py-files for main streamlit application (use: streamlit run streamlit_main.py)
 
 #### Data
@@ -24,6 +25,6 @@ City District Geojson "neighbourhoods.geojson" taken from https://insideairbnb.c
 
 works with Python version 3.12.7
 
-comprehensive **environment.yml** (including Python) for conda environments (project was created with conda), may contain unnecessary packages
+comprehensive *environment.yml* (including Python) for conda environments (project was created with conda), may contain unnecessary packages
 
-**requirements.txt** for pip install, only necessary packages
+*requirements.txt* for pip install, only necessary packages
