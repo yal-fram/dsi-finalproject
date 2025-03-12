@@ -14,6 +14,7 @@ Jupyter Notebooks are for data exploration and testing.
 #### Data
 
 Datasets taken from https://opendata.muenchen.de/dataset/fahrten-mit-dem-mvg-rad
+
 Years: 2020 - 2023
 
 City District Geojson "neighbourhoods.geojson" taken from https://insideairbnb.com/get-the-data/ (Munich)
@@ -23,5 +24,6 @@ City District Geojson "neighbourhoods.geojson" taken from https://insideairbnb.c
 
 works with Python version 3.12.7
 
-comprehensive environment.yml (including Python) for conda environments (project was created with conda), may contain unnecessary libraries
-requirements.txt for pip install, only necessary libraries
+comprehensive **environment.yml** (including Python) for conda environments (project was created with conda), may contain unnecessary packages
+
+**requirements.txt** for pip install, only necessary packages
