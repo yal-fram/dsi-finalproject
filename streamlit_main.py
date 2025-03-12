@@ -84,9 +84,9 @@ def format_files(df):
     df = df.dropna()
 
     # Hinzufügen der Distanz
-    # dauert ein paar Minuten, uncomment nur, wenn erwünscht!
+    # dauert lange, uncomment nur, wenn erwünscht und ausreichend Rechenleistung verfügbar!
     # wird später zur Angabe der mittleren Distanz verwendet
-    # diese Zeilenmüsste dann entsprechend auch ent-kommentiert werden: suche nach "Entfernung" und "DISTANCE"
+    # diese Zeilen müssten dann entsprechend auch ent-kommentiert werden: suche nach "Entfernung" und "DISTANCE"
     # df = dp.calculate_distance(df)
 
     # Hinzufügen des Stadtviertels
